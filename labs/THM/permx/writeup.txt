@@ -1,0 +1,56 @@
+scan
+
+nmap -sC -sV 10.10.11.23 trovo porta aperta 22 e 80
+
+pagina web, lancio gobuster ma niente con enumerazione `gobuster dir -u "http://permx.htb" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt`
+Lancio ffuz con `ffuf -u http://permx.htb -H "Host:FUZZ.permx.htb" -w /usr/share/wordlists/amass/subdomains-top1mil-110000.txt -fw 18` e trovo due vhost lms e www
+
+proviamo lms
+
+trovo pagina di login, provo a fare brute froce con hydra 
+
+ogni volta che si prova a fare login rimanda qui `http://lms.permx.htb/index.php?loginFailed=1&error=user_password_incorrect`
+
+`hydra -L /usr/share/wordlists/seclists/Usernames/top-usernames-shortlist.txt -P /usr/share/wordlists/rockyou.txt lms.permx.htb http-post-form "/index.php:username=^USER^&password=^PASS^:loginFailed=1"`
+ma niente
+
+provo enumerazione con gobuster e trovo due sottodirecotry interessanti, ovvero app e documentation
+
+non sono molto utili, tranne per documentation che ci dice la versione di Chamilo
+
+dato che hydra non fuznona, sql injection non funziona, gobuster non trova nulla di interressante cerchiamo onlone chamelio wxploit
+
+troviamo qualcosa di molto interessante, ovvero la vulnerabilità CVE-2023-4220 che si può dare se la versione è <=1.11.24.
+
+la nostra versione la troviamo in documentation, ed è la 1.11, quindi possiamo lanciare l'attacco tramite CVE
+
+seguiamo i passagi trovati su github e lanciamo lo script che ci crea la webshell
+
+http://lms.permx.htb/main/inc/lib/javascript/bigupload/files/shell.php?cmd=<command>
+
+una volta caricata la nostra shell.sh, prendiamo la shell e siamo wwwdata
+
+lancio linpeas, e mi trova una password all'interno di un file config
+
+per trovare il file lanciamo il comando `find /var/www/chamilo/ -name configuration* 2>/dev/null` e troviamo due file
+
+/var/www/chamilo/app/config/configuration.php
+/var/www/chamilo/plugin/sepe/src/configuration.php
+
+vediamoli
+
+nel primo file troviamo le configuraizoni db_user = "chamilo" e db_pass = "03F6lY3uXAP2bkW8"
+nel secondo nulla di interessante, proviamo quindi ad accedere al db
+
+dal db non otteniamo nulla di interessante, provaimo ad accedere ad ssh tramite queste credenziali
+
+con user chamilo non funziona, proviamo user mtz
+
+ora siamo user mtz, e usando sudo -l vediamo che possiamo lanciare il file acl.sh con i permessi di root.
+
+il file usa setfacl per modoficare la access control list e modificare quindi i permessi di un file
+
+
+lo usiamo per modificare i file /etc/passwd e /etc/shadow in modo da creare un nostro utente root
+
+fatto ciò possiamo entrare come root usando su mia_root, e ci siamo

