@@ -1,8 +1,8 @@
 # Security Assessment Report – PermX
 
 **Author:** Franco Salvucci  
-**Date:** [inserisci data]  
-**Environment:** HackTheBox Lab  
+**Date:** 10/09/2024  
+**Environment:** TryHackMe Lab  
 **Target:** 10.10.11.23  
 
 ---
@@ -161,4 +161,4 @@ Si raccomanda l’adozione di pratiche di sicurezza più rigorose, tra cui patch
 - ffuf vhost fuzzing
 
 ### Note
-Dettagli tecnici completi disponibili nella directory labs.
+Dettagli tecnici completi disponibili nella directory [labs-permx](/labs/THM/permx/)

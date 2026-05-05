@@ -1,8 +1,8 @@
 # Security Assessment Report – Custom Internal Lab
 
 **Author:** Franco Salvucci  
-**Date:** [inserisci data]  
-**Environment:** Academic Lab (Custom Machine)  
+**Date:** 10/08/2024  
+**Environment:** Academic Lab (Custom Machine) a.k.a Robot 
 **Target:** 10.0.2.5  
 
 ---
@@ -164,4 +164,4 @@ La combinazione di queste vulnerabilità consente una compromissione completa co
 - Wildcard exploitation
 
 ### Note
-Dettagli tecnici completi disponibili nella directory labs.
+Dettagli tecnici completi disponibili nella directory [labs-custom1](/labs/Custom/custom-1/).

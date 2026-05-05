@@ -1,0 +1,19 @@
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-06-26 10:02 CEST
+Nmap scan report for 10.0.2.4
+Host is up (0.000077s latency).
+Not shown: 998 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.4p1 Debian 5+deb11u3 (protocol 2.0)
+| ssh-hostkey: 
+|   3072 c4:2c:27:d9:86:5d:d0:b0:d6:39:dc:15:e3:d2:b7:c2 (RSA)
+|   256 39:ee:55:d6:d8:3f:e8:af:1f:18:0b:b9:b1:4d:ef:a5 (ECDSA)
+|_  256 b5:2d:98:e2:b7:2c:4e:ba:4d:80:1e:19:d1:c0:a0:47 (ED25519)
+80/tcp open  http    Apache httpd 2.4.59 ((Debian))
+|_http-title: Site doesn't have a title (text/html).
+|_http-server-header: Apache/2.4.59 (Debian)
+MAC Address: 08:00:27:23:B2:5C (Oracle VirtualBox virtual NIC)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 6.73 seconds
+
