@@ -1,0 +1,18 @@
+void users(void)
+
+{
+  system("clear");
+  puts("\n===============List of active users================");
+  puts("support@bank.a");
+  puts("contact@bank.a");
+  puts("cyber@bank.a");
+  puts("admins@bank.a");
+  puts("sam@bank.a");
+  puts("admin0@bank.a");
+  puts("super_user@bank.a");
+  puts("admin@bank.a");
+  puts("control_admin@bank.a");
+  puts("it_admin@bank.a\n\n");
+  options();
+  return;
+}

